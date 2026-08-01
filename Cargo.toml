@@ -1,0 +1,3 @@
+[workspace]
+resolver = "2"
+members = ["1cheri-src", "spikes/render-spike"]

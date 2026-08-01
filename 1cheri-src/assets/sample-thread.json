@@ -1,0 +1,58 @@
+{
+  "posts": [
+    {
+      "no": 100000001,
+      "resto": 0,
+      "sub": "Offline fixture thread (not a real 4chan capture)",
+      "com": "Bundled test thread for the v0.1.0 media-proof milestone.<br>Three attachments below: two synthetic webm clips and one static image, used instead of live &#039;/gif/&#039; content so this milestone runs offline and reproducibly.",
+      "filename": "sample-clip-one",
+      "ext": ".webm",
+      "tim": 100000001,
+      "w": 640,
+      "h": 360,
+      "fsize": 521794,
+      "local_media": "100000001.webm",
+      "replies": 5,
+      "images": 3
+    },
+    {
+      "no": 100000002,
+      "resto": 100000001,
+      "com": "source on this one? &gt;&gt;100000001 check https://ffmpeg.org/ffmpeg-filters.html#testsrc"
+    },
+    {
+      "no": 100000003,
+      "resto": 100000001,
+      "com": "&gt;&gt;100000002<br>It&#039;s just an ffmpeg testsrc pattern, no source needed."
+    },
+    {
+      "no": 100000004,
+      "resto": 100000001,
+      "com": "Nice colors<br>&gt;implying this is a real video<br>Second clip incoming",
+      "filename": "sample-clip-two",
+      "ext": ".webm",
+      "tim": 100000002,
+      "w": 640,
+      "h": 360,
+      "fsize": 627865,
+      "local_media": "100000002.webm"
+    },
+    {
+      "no": 100000005,
+      "resto": 100000001,
+      "com": "&gt;&gt;100000004<br>yeah nice"
+    },
+    {
+      "no": 100000006,
+      "resto": 100000001,
+      "com": "Here&#039;s a static image for the media classifier<br>&gt;&gt;100000001",
+      "filename": "mandelbrot",
+      "ext": ".png",
+      "tim": 100000003,
+      "w": 480,
+      "h": 360,
+      "fsize": 132822,
+      "local_media": "100000003.png"
+    }
+  ]
+}
