@@ -174,12 +174,20 @@ fn attach_quick_actions(
     summary: &ThreadSummary,
     trigger_render: &Rc<dyn Fn()>,
     reload_and_render: &Rc<dyn Fn()>,
+    row_popovers: &Rc<RefCell<Vec<gtk4::Popover>>>,
 ) {
     let subject = summary.subject.clone().unwrap_or_else(|| format!("Thread #{}", summary.number));
 
     let popover = gtk4::Popover::new();
     popover.set_parent(row_widget);
     popover.set_has_arrow(true);
+    // `set_parent` doesn't give the row an owning reference the way
+    // `Box::append` would -- without tracking these and unparenting them
+    // before the row itself is discarded on the next render, GTK warns
+    // "Finalizing GtkButton/GtkBox, but it still has children left:
+    // GtkPopover" every time the catalogue re-renders (search, sort,
+    // filter, board switch all rebuild every row from scratch).
+    row_popovers.borrow_mut().push(popover.clone());
 
     let popover_box = gtk4::Box::new(gtk4::Orientation::Vertical, 2);
     let pin_button = gtk4::Button::with_label("Pin matching this subject");
@@ -604,6 +612,10 @@ pub fn build_page(shell: &Rc<Shell>, initial_board: String) {
     // the same set) as `summaries`, so row-activation needs its own
     // index-to-thread mapping.
     let displayed: Rc<RefCell<Vec<ThreadSummary>>> = Rc::new(RefCell::new(Vec::new()));
+    // Every row-level quick-actions Popover from the current render pass,
+    // unparented and cleared at the start of the next one (see
+    // attach_quick_actions).
+    let row_popovers: Rc<RefCell<Vec<gtk4::Popover>>> = Rc::new(RefCell::new(Vec::new()));
     let last_fetch: Rc<RefCell<HashMap<String, Instant>>> = Rc::new(RefCell::new(HashMap::new()));
     let current_board: Rc<RefCell<String>> = Rc::new(RefCell::new(initial_board.clone()));
     let current_sort: Rc<RefCell<String>> = Rc::new(RefCell::new(SORT_KEYS[initial_sort_index].to_string()));
@@ -659,6 +671,7 @@ pub fn build_page(shell: &Rc<Shell>, initial_board: String) {
         let list_scroller = list_scroller.clone();
         let summaries = summaries.clone();
         let displayed = displayed.clone();
+        let row_popovers = row_popovers.clone();
         let current_sort = current_sort.clone();
         let search_text = search_text.clone();
         let shell = shell.clone();
@@ -741,6 +754,9 @@ pub fn build_page(shell: &Rc<Shell>, initial_board: String) {
             }
             hidden_button.set_label(&format!("Hidden ({})", hidden.len()));
 
+            for p in row_popovers.borrow_mut().drain(..) {
+                p.unparent();
+            }
             while let Some(child) = list_box.first_child() {
                 list_box.remove(&child);
             }
@@ -748,20 +764,20 @@ pub fn build_page(shell: &Rc<Shell>, initial_board: String) {
             if hidden_button.is_active() {
                 for (s, reasons) in &hidden {
                     let content = build_row(s, false, Some(reasons));
-                    attach_quick_actions(&content, &shell, &current_board, s, &trigger_render, &reload_and_render);
+                    attach_quick_actions(&content, &shell, &current_board, s, &trigger_render, &reload_and_render, &row_popovers);
                     list_box.append(&wrap_in_row(&content, false));
                     shown.push(s.clone());
                 }
             } else {
                 for s in &pinned {
                     let content = build_row(s, true, None);
-                    attach_quick_actions(&content, &shell, &current_board, s, &trigger_render, &reload_and_render);
+                    attach_quick_actions(&content, &shell, &current_board, s, &trigger_render, &reload_and_render, &row_popovers);
                     list_box.append(&wrap_in_row(&content, true));
                     shown.push(s.clone());
                 }
                 for s in &visible {
                     let content = build_row(s, false, None);
-                    attach_quick_actions(&content, &shell, &current_board, s, &trigger_render, &reload_and_render);
+                    attach_quick_actions(&content, &shell, &current_board, s, &trigger_render, &reload_and_render, &row_popovers);
                     list_box.append(&wrap_in_row(&content, false));
                     shown.push(s.clone());
                 }
@@ -851,13 +867,23 @@ pub fn build_page(shell: &Rc<Shell>, initial_board: String) {
     // themselves (e.g. after add/remove), so the Rc is populated after
     // construction and each handler looks it up through the cell.
     let rebuild_tabs_cell: Rc<RefCell<Option<Rc<dyn Fn()>>>> = Rc::new(RefCell::new(None));
+    // Every "Remove board" Popover from the current set of tabs, unparented
+    // and cleared at the start of the next rebuild -- see the identical
+    // reasoning on `row_popovers` above; `rebuild_tabs` re-creates every tab
+    // button (and its popover) from scratch on every call, including a
+    // plain board-tab click, not just when boards are actually added/removed.
+    let tab_popovers: Rc<RefCell<Vec<gtk4::Popover>>> = Rc::new(RefCell::new(Vec::new()));
     {
         let tabs_box = tabs_box.clone();
         let shell = shell.clone();
         let fetch_and_show = fetch_and_show.clone();
         let current_board = current_board.clone();
         let rebuild_tabs_cell_for_children = rebuild_tabs_cell.clone();
+        let tab_popovers = tab_popovers.clone();
         let rebuild_tabs = move || {
+            for p in tab_popovers.borrow_mut().drain(..) {
+                p.unparent();
+            }
             while let Some(child) = tabs_box.first_child() {
                 tabs_box.remove(&child);
             }
@@ -895,6 +921,7 @@ pub fn build_page(shell: &Rc<Shell>, initial_board: String) {
                     let popover = gtk4::Popover::new();
                     popover.set_parent(&button);
                     popover.set_has_arrow(true);
+                    tab_popovers.borrow_mut().push(popover.clone());
                     let remove_item_button = gtk4::Button::with_label("Remove board");
                     popover.set_child(Some(&remove_item_button));
                     {
