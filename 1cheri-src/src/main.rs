@@ -1,4 +1,4 @@
-// 1cheri v0.4.20 — fix: filter/pin chips in the Filters editor now size to their own text instead of all matching the widest chip in the popover (FlowBox needed homogeneous(false) + per-chip halign(Start)).
+// 1cheri v0.4.21 — fix: switching boards (and every catalogue re-render) logged "Finalizing GtkButton, but it still has children left: GtkPopover" per removable tab -- right-click popovers were manually set_parent()'d but never unparent()'d before their anchor widget was torn down and rebuilt.
 
 mod comments;
 mod config;
