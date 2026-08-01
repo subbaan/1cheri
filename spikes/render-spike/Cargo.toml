@@ -1,0 +1,12 @@
+[package]
+name = "render-spike"
+version = "0.1.0"
+edition = "2021"
+description = "Throwaway spike (project.md §18.1.1): confirm libmpv renders reliably inside a GTK4 widget before real app work begins."
+publish = false
+
+[dependencies]
+gtk4 = "0.11"
+libmpv2 = "6.0.0"
+epoxy = "0.1"
+libc = "0.2"
