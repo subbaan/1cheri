@@ -10,7 +10,7 @@
 // (ui/catalogue.rs), since that needs UI-visible state (a status message)
 // rather than being purely a network concern.
 
-use crate::models::{ApiThread, CatalogPage};
+use crate::models::{ApiThread, BoardInfo, BoardsResponse, CatalogPage};
 use gtk4::glib;
 use std::cell::RefCell;
 use std::sync::mpsc;
@@ -76,6 +76,25 @@ pub fn fetch_catalogue<F: FnOnce(Result<Vec<CatalogPage>, String>) + 'static>(bo
             .call()
             .map_err(|e| e.to_string())
             .and_then(|resp| resp.into_json::<Vec<CatalogPage>>().map_err(|e| e.to_string()));
+        let _ = tx.send(result);
+    });
+    poll_channel(rx, on_done);
+}
+
+/// The full board list, for the Settings window's board directory. Same
+/// host/throttle as `fetch_catalogue` -- not cached, since this is a
+/// manual, infrequent action (opening a picker), not something worth adding
+/// a cache tier for.
+pub fn fetch_boards<F: FnOnce(Result<Vec<BoardInfo>, String>) + 'static>(on_done: F) {
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        throttle_global();
+        let result = agent()
+            .get("https://a.4cdn.org/boards.json")
+            .call()
+            .map_err(|e| e.to_string())
+            .and_then(|resp| resp.into_json::<BoardsResponse>().map_err(|e| e.to_string()))
+            .map(|r| r.boards);
         let _ = tx.send(result);
     });
     poll_channel(rx, on_done);

@@ -1,4 +1,4 @@
-// 1cheri v0.4.25 — fix: default configured boards are now /wsg/ and /g/ (both worksafe), not /gif/ -- a fresh install shouldn't silently land a new user on an 18+ board without them choosing that themselves. /gif/ remains a deliberate opt-in via Settings.
+// 1cheri v0.4.27 — feature: a "?" button next to Add in Settings' Boards section opens a searchable directory of every real 4chan board (fetched live), showing title/description and marking 18+ boards -- click one to add it directly.
 
 mod comments;
 mod config;

@@ -36,6 +36,20 @@ pub struct Config {
     /// already backed out of before quitting felt surprising.
     #[serde(default)]
     pub resume_last_thread: bool,
+    /// Last-used size of the Filters/Settings/Temporary-panel windows,
+    /// remembered so they reopen at whatever size the user last resized
+    /// them to instead of resetting to a fixed default every time (see
+    /// `ui::remember_window_size`). Missing fields (e.g. an older
+    /// config.toml) fall back to `Config::default()`'s values below via the
+    /// struct-level `#[serde(default)]` above, same as every other field.
+    pub filters_window_width: i32,
+    pub filters_window_height: i32,
+    pub settings_window_width: i32,
+    pub settings_window_height: i32,
+    pub temporary_window_width: i32,
+    pub temporary_window_height: i32,
+    pub board_directory_window_width: i32,
+    pub board_directory_window_height: i32,
 }
 
 /// Per-board pin/hide word (or phrase) lists, per project.md §11 plus
@@ -71,6 +85,14 @@ impl Default for Config {
             global_pin_words: Vec::new(),
             global_hide_words: Vec::new(),
             resume_last_thread: false,
+            filters_window_width: 420,
+            filters_window_height: 620,
+            settings_window_width: 360,
+            settings_window_height: 580,
+            temporary_window_width: 360,
+            temporary_window_height: 420,
+            board_directory_window_width: 420,
+            board_directory_window_height: 500,
         }
     }
 }

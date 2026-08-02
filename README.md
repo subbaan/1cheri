@@ -16,6 +16,7 @@ The default configured boards (`/wsg/`, `/g/`) are worksafe — nothing here is 
 - Current post + direct replies referencing it, shown alongside the media.
 - Save the current file, or every file in a thread at once ("Save all media"), with live progress feedback.
 - Resume-on-startup is opt-in (off by default) — reopening the last-viewed thread only happens if you enable it in Settings, and only if you quit while still inside a thread rather than after backing out to the catalogue.
+- Board directory: a "?" next to Settings' Add-a-board box opens a searchable list of every real board 4chan has (title, description, worksafe/18+ marked), fetched live — click one to add it.
 
 ## Building (Arch / Manjaro)
 

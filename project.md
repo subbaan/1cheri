@@ -219,6 +219,8 @@ The user must be able to:
 - Refresh the current board.
 - Remember the last active board.
 
+Board add/remove is done through the Settings window's Boards list, not the catalogue's own tab bar (no in-place tab reordering exists either -- boards appear in whatever order they're listed in `config.toml`). Added after 0.4.x use: a "?" button next to Boards' Add entry opens a searchable directory of every board 4chan actually has (fetched live from `a.4cdn.org/boards.json`, not a bundled/hardcoded list, so it can't go stale), showing each board's title and real description and marking non-worksafe ones -- clicking an entry adds it directly. This exists because a bare board code isn't otherwise discoverable from inside the app -- a few (`g`, `a`) are easily guessed, most aren't.
+
 Threads should be displayed as compact cards or rows.
 
 Each thread entry displays:
