@@ -1,4 +1,4 @@
-// 1cheri v0.4.24 — fix: switching boards left the same *row index* selected/scrolled-to as before, landing on an unrelated thread in the new board's list. GtkListBox (Browse mode, same widget reused across renders) was auto-selecting whatever row now occupies that index; board switches now explicitly reset to the first row and force scroll to the top.
+// 1cheri v0.4.25 — fix: default configured boards are now /wsg/ and /g/ (both worksafe), not /gif/ -- a fresh install shouldn't silently land a new user on an 18+ board without them choosing that themselves. /gif/ remains a deliberate opt-in via Settings.
 
 mod comments;
 mod config;
