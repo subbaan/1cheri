@@ -11,7 +11,7 @@ pub fn open_settings(shell: &Rc<Shell>) {
         .title("Settings")
         .transient_for(&shell.window)
         .default_width(360)
-        .default_height(520)
+        .default_height(580)
         .build();
 
     let root = gtk4::Box::new(gtk4::Orientation::Vertical, 14);
@@ -153,6 +153,25 @@ pub fn open_settings(shell: &Rc<Shell>) {
     });
     volume_row.append(&volume_spin);
     root.append(&volume_row);
+
+    root.append(&gtk4::Separator::new(gtk4::Orientation::Horizontal));
+
+    // Diagnostics
+    let diagnostics_label = gtk4::Label::new(None);
+    diagnostics_label.set_markup("<b>Diagnostics</b>");
+    diagnostics_label.set_xalign(0.0);
+    root.append(&diagnostics_label);
+
+    let log_button = gtk4::Button::with_label("Open log file");
+    log_button.set_tooltip_text(Some(&crate::logging::log_path().display().to_string()));
+    log_button.connect_clicked(|_| {
+        let uri = format!("file://{}", crate::logging::log_path().display());
+        let ctx: Option<&gtk4::gio::AppLaunchContext> = None;
+        if let Err(e) = gtk4::gio::AppInfo::launch_default_for_uri(&uri, ctx) {
+            eprintln!("[settings] failed to open {uri}: {e}");
+        }
+    });
+    root.append(&log_button);
 
     window.set_child(Some(&root));
     window.present();

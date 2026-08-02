@@ -1,6 +1,6 @@
 [package]
 name = "cheri"
-version = "0.4.21"
+version = "0.4.24"
 edition = "2021"
 description = "Keyboard-driven desktop viewer for 4chan image/video threads (project.md milestone 0.4.0: viewer refinements)."
 license = "MIT"

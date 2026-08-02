@@ -225,14 +225,11 @@ impl AppState {
         ));
     }
 
-    fn move_selection(&self, delta: isize) {
-        if self.media.is_empty() {
-            return;
-        }
-        let len = self.media.len() as isize;
-        let current = self.current_index.get() as isize;
-        let next = ((current + delta) % len + len) % len;
-        if let Some(row) = self.list_box.row_at_index(next as i32) {
+    /// Selects and focuses a specific row directly (as opposed to
+    /// `move_selection`'s relative step) -- shared by `Home`/`End`/Page
+    /// Up/Page Down below.
+    fn select_index(&self, index: usize) {
+        if let Some(row) = self.list_box.row_at_index(index as i32) {
             self.list_box.select_row(Some(&row));
             // `select_row` alone updates the highlighted row but not GTK's
             // keyboard focus, so native Up/Down keynav would keep moving
@@ -243,6 +240,39 @@ impl AppState {
             // native Up/Down keynav uniformly.)
             row.grab_focus();
         }
+    }
+
+    fn move_selection(&self, delta: isize) {
+        if self.media.is_empty() {
+            return;
+        }
+        let len = self.media.len() as isize;
+        let current = self.current_index.get() as isize;
+        let next = ((current + delta) % len + len) % len;
+        self.select_index(next as usize);
+    }
+
+    /// Home/End: jump straight to the first/last item. Unlike H/L's
+    /// wraparound, this clamps -- End at the last item should stay there,
+    /// not wrap to the first.
+    fn jump_to_edge(&self, to_end: bool) {
+        if self.media.is_empty() {
+            return;
+        }
+        self.select_index(if to_end { self.media.len() - 1 } else { 0 });
+    }
+
+    /// Page Up/Page Down: jump by a fixed step, clamped to the ends rather
+    /// than wrapping (same reasoning as `jump_to_edge`).
+    fn page_move(&self, delta: isize) {
+        if self.media.is_empty() {
+            return;
+        }
+        const PAGE_STEP: isize = 10;
+        let len = self.media.len() as isize;
+        let current = self.current_index.get() as isize;
+        let next = (current + delta * PAGE_STEP).clamp(0, len - 1);
+        self.select_index(next as usize);
     }
 
     fn update_comment_panel(&self, post_number: u64) {
@@ -655,7 +685,7 @@ fn build_page(shell: &Rc<Shell>, thread: Thread, media_dir: PathBuf, resume_post
     content.set_vexpand(true);
 
     let hint_label = gtk4::Label::new(Some(
-        "H/L prev/next  \u{2190}/\u{2192} seek \u{00b1}5s  \u{2191}/\u{2193} list  Space pause  M mute  R restart  F fullscreen  S save  B/Esc back  Ctrl+Q quit",
+        "H/L prev/next  \u{2190}/\u{2192} seek \u{00b1}5s  \u{2191}/\u{2193}/PgUp/PgDn/Home/End list  Space pause  M mute  R restart  F fullscreen  S save  B/Esc back  Ctrl+Q quit",
     ));
     hint_label.set_xalign(1.0);
     hint_label.set_margin_start(6);
@@ -728,6 +758,10 @@ fn build_page(shell: &Rc<Shell>, thread: Thread, media_dir: PathBuf, resume_post
             match key {
                 gdk::Key::h | gdk::Key::H => state.move_selection(-1),
                 gdk::Key::l | gdk::Key::L => state.move_selection(1),
+                gdk::Key::Home => state.jump_to_edge(false),
+                gdk::Key::End => state.jump_to_edge(true),
+                gdk::Key::Page_Up => state.page_move(-1),
+                gdk::Key::Page_Down => state.page_move(1),
                 gdk::Key::Left => {
                     if let Some(p) = state.player.borrow().as_ref() {
                         if let Some(pos) = p.position() {
