@@ -463,7 +463,7 @@ global_pin_words = []
 global_hide_words = ["example hide"]
 
 [[board_filters]]
-board = "gif"
+board = "wsg"
 pin_words = ["example pin one", "example pin two"]
 hide_words = ["example hide one", "example hide two", "example hide three"]
 ```
@@ -595,14 +595,14 @@ autoplay = true
 resume_last_thread = false
 save_directory = "~/Downloads/1cheri"
 filename_template = "{post}_{original_name}"
-boards = ["gif", "wsg", "g"]
-active_board = "gif"
+boards = ["wsg", "g"]
+active_board = "wsg"
 sort_threads_by = "most_videos"
 global_pin_words = []
 global_hide_words = ["example hide"]
 
 [[board_filters]]
-board = "gif"
+board = "wsg"
 pin_words = ["example pin one", "example pin two"]
 hide_words = ["example hide one", "example hide two", "example hide three"]
 ```

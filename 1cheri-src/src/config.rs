@@ -58,8 +58,14 @@ impl Default for Config {
             autoplay: true,
             save_directory: "~/Downloads/1cheri".to_string(),
             filename_template: "{post}_{original_name}".to_string(),
-            boards: vec!["gif".to_string(), "wsg".to_string()],
-            active_board: "gif".to_string(),
+            // Worksafe by default -- /wsg/ ("Worksafe GIF") and /g/
+            // (Technology) -- since a fresh install shouldn't silently drop
+            // a new user onto an 18+ board without them having chosen that
+            // themselves. /gif/ (the board this app was actually built
+            // around, and genuinely NSFW) is a deliberate opt-in the user
+            // adds themselves via Settings, not a default.
+            boards: vec!["wsg".to_string(), "g".to_string()],
+            active_board: "wsg".to_string(),
             sort_threads_by: "most_videos".to_string(),
             board_filters: Vec::new(),
             global_pin_words: Vec::new(),
