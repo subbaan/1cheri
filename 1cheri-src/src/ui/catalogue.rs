@@ -616,6 +616,43 @@ pub fn build_page(shell: &Rc<Shell>, initial_board: String) {
     // unparented and cleared at the start of the next one (see
     // attach_quick_actions).
     let row_popovers: Rc<RefCell<Vec<gtk4::Popover>>> = Rc::new(RefCell::new(Vec::new()));
+
+    // Home/End/Page Up/Page Down for the thread list -- GtkListBox's native
+    // keynav already covers Up/Down (that's why those need no code here),
+    // but not paging or jump-to-edge. Attached directly to `list_box` rather
+    // than the window (unlike the "/" search-focus controller) since this
+    // only ever makes sense while the list itself has focus, which GTK
+    // already handles correctly on its own.
+    let list_nav_controller = gtk4::EventControllerKey::new();
+    {
+        let list_box = list_box.clone();
+        let displayed = displayed.clone();
+        list_nav_controller.connect_key_pressed(move |_ctrl, key, _code, _modifiers| {
+            let count = displayed.borrow().len() as i32;
+            if count == 0 {
+                return glib::Propagation::Proceed;
+            }
+            const PAGE_STEP: i32 = 10;
+            let current = list_box.selected_row().map(|r| r.index()).unwrap_or(0);
+            let target = match key {
+                gdk::Key::Home => Some(0),
+                gdk::Key::End => Some(count - 1),
+                gdk::Key::Page_Up => Some((current - PAGE_STEP).max(0)),
+                gdk::Key::Page_Down => Some((current + PAGE_STEP).min(count - 1)),
+                _ => None,
+            };
+            let Some(index) = target else {
+                return glib::Propagation::Proceed;
+            };
+            if let Some(row) = list_box.row_at_index(index) {
+                list_box.select_row(Some(&row));
+                row.grab_focus();
+            }
+            glib::Propagation::Stop
+        });
+    }
+    list_box.add_controller(list_nav_controller);
+
     let last_fetch: Rc<RefCell<HashMap<String, Instant>>> = Rc::new(RefCell::new(HashMap::new()));
     let current_board: Rc<RefCell<String>> = Rc::new(RefCell::new(initial_board.clone()));
     let current_sort: Rc<RefCell<String>> = Rc::new(RefCell::new(SORT_KEYS[initial_sort_index].to_string()));
@@ -784,13 +821,31 @@ pub fn build_page(shell: &Rc<Shell>, initial_board: String) {
             }
             *displayed.borrow_mut() = shown;
 
+            // `list_box` is the same long-lived widget across renders (only
+            // its rows get torn down and rebuilt), and Browse selection mode
+            // always needs exactly one row selected -- left alone, GTK keeps
+            // whatever *index* was previously selected and auto-selects
+            // whichever new row now occupies it, which looks exactly like
+            // "still on the same row" even though it's an entirely different
+            // thread. On an actual board switch, explicitly reset to the
+            // first row instead of leaving that to chance.
+            if board_switched {
+                if let Some(row) = list_box.row_at_index(0) {
+                    list_box.select_row(Some(&row));
+                }
+            }
+
             // Restoring once isn't enough: thumbnails for the newly-rebuilt
             // rows keep arriving asynchronously and resizing rows for a
             // while afterward, which silently undoes an earlier restore --
-            // same hazard as the thumbnail-strip scroll in viewer.rs.
-            // Retrying over a few staggered delays rides that out; each
-            // call is a cheap no-op once nothing's moved.
-            if saved_scroll > 0.0 {
+            // same hazard as the thumbnail-strip scroll in viewer.rs. This
+            // also covers forcing scroll to 0 on a board switch itself
+            // (saved_scroll is already 0.0 then): without retrying, the same
+            // async thumbnail resizing could drift it back down after the
+            // initial reset. Retrying over a few staggered delays rides
+            // this out either way; each call is a cheap no-op once nothing's
+            // moved.
+            if board_switched || saved_scroll > 0.0 {
                 for delay_ms in [0, 150, 500] {
                     let list_scroller = list_scroller.clone();
                     glib::timeout_add_local_once(Duration::from_millis(delay_ms), move || {

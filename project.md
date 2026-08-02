@@ -374,6 +374,8 @@ The entire primary workflow is usable from the keyboard. The actual bindings end
 ```text
 H or L          Previous / next media (moves the thumbnail-strip selection)
 Up or Down      Previous / next media (native list navigation -- same effect as H/L)
+Page Up/Down    Jump 10 media items back / forward, clamped to the ends (not wrapping)
+Home or End     Jump to the first / last media item
 Left or Right   Seek current video -5s / +5s
 Space           Play or pause
 M               Toggle mute
@@ -384,6 +386,8 @@ B or Escape     Return to thread catalogue
 /               Focus the catalogue's search box (catalogue only)
 Ctrl+Q          Quit (works from either view)
 ```
+
+The catalogue's own thread list additionally supports Page Up/Down (jump 10 threads) and Home/End (jump to the first/last thread) the same way -- Up/Down there is native GtkListBox keynav (no code needed), but paging and jump-to-edge aren't part of GtkListBox's native keynav, so those two are wired explicitly, the same as the viewer's.
 
 Revised after 0.4.x use: quit moved from a bare `Q` to `Ctrl+Q`, and made global (works from the catalogue too, not just the viewer -- previously the app's only key controller was viewer-session-scoped, so `Q` silently did nothing from the catalogue). Bare `Q` was also a latent conflict with the catalogue's search box, where `q` is an ordinary character to type. `/`-to-focus-search was added the same pass, a common convention on Linux (browsers, mutt, less...). The viewer also has a persistent top bar now (§6.2) with clickable Back, Save, and "Save all media" controls duplicating the B/Esc and S bindings, plus a Replies visibility toggle with no keybinding equivalent.
 
@@ -790,8 +794,14 @@ build instructions):
 - ~~Bulk downloads (whole thread)~~ -- delivered, see §13.
 - Duplicate detection (exact-file-match only; near-duplicate/perceptual
   matching was considered and judged not worth the added complexity).
-- Better diagnostics.
-- Create a README.md for the project.
+- ~~Better diagnostics~~ -- delivered: process-wide stdout/stderr redirect to
+  `~/.local/state/1cheri/1cheri.log` (see `logging.rs`), truncated fresh each
+  launch, with an "Open log file" button in Settings. This is a
+  file-descriptor-level redirect, not just wrapping the app's own
+  `eprintln!` calls -- it's the only thing that actually catches mpv/
+  ffmpeg's hardware-decoder-probing messages, which write straight to the
+  real stderr fd and bypass mpv's own logging/terminal settings entirely.
+- ~~Create a README.md for the project~~ -- delivered, see `README.md`.
 
 ## 19. Initial technical risks
 

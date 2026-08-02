@@ -1,8 +1,9 @@
-// 1cheri v0.4.21 — fix: switching boards (and every catalogue re-render) logged "Finalizing GtkButton, but it still has children left: GtkPopover" per removable tab -- right-click popovers were manually set_parent()'d but never unparent()'d before their anchor widget was torn down and rebuilt.
+// 1cheri v0.4.24 — fix: switching boards left the same *row index* selected/scrolled-to as before, landing on an unrelated thread in the new board's list. GtkListBox (Browse mode, same widget reused across renders) was auto-selecting whatever row now occupies that index; board switches now explicitly reset to the first row and force scroll to the top.
 
 mod comments;
 mod config;
 mod filters;
+mod logging;
 mod media_cache;
 mod models;
 mod net;
@@ -43,6 +44,8 @@ fn main() -> ExitCode {
         return ExitCode::SUCCESS;
     }
     let open_fixture = args.iter().any(|a| a == "--fixture");
+
+    logging::redirect_stdio_to_log_file();
 
     let config = Config::load();
     let fixture_media_dir = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/media"));

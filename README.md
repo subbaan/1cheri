@@ -60,6 +60,7 @@ The viewer's top bar also has clickable Back, Save, "Save all media", and a Repl
 ~/.config/1cheri/config.toml       settings, pin/hide word lists
 ~/.local/share/1cheri/state.sqlite3 thread cache, resume state
 ~/.cache/1cheri/                    downloaded media + thumbnail cache (grows unbounded; clear manually if needed)
+~/.local/state/1cheri/1cheri.log    this session's log (truncated fresh on each launch); also openable via Settings
 ```
 
 ## Status
