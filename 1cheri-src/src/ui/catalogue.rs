@@ -295,9 +295,16 @@ fn open_filters_editor(shell: &Rc<Shell>, current_board: &Rc<RefCell<String>>, t
     let window = gtk4::Window::builder()
         .title(format!("Filters — /{board}/"))
         .transient_for(&shell.window)
-        .default_width(420)
-        .default_height(620)
         .build();
+    super::remember_window_size(
+        &window,
+        shell,
+        |c| (c.filters_window_width, c.filters_window_height),
+        |c, w, h| {
+            c.filters_window_width = w;
+            c.filters_window_height = h;
+        },
+    );
 
     let root = gtk4::Box::new(gtk4::Orientation::Vertical, 12);
     root.set_margin_top(10);
@@ -327,6 +334,7 @@ fn open_filters_editor(shell: &Rc<Shell>, current_board: &Rc<RefCell<String>>, t
                 shell_remove.config.borrow().save();
             },
             trigger_render.clone(),
+            None,
         )
     };
     let global_hide_words_widget = {
@@ -347,6 +355,7 @@ fn open_filters_editor(shell: &Rc<Shell>, current_board: &Rc<RefCell<String>>, t
                 shell_remove.config.borrow().save();
             },
             trigger_render.clone(),
+            None,
         )
     };
 
@@ -373,6 +382,7 @@ fn open_filters_editor(shell: &Rc<Shell>, current_board: &Rc<RefCell<String>>, t
                 shell_remove.config.borrow().save();
             },
             trigger_render.clone(),
+            None,
         )
     };
     let hide_words_widget = {
@@ -398,6 +408,7 @@ fn open_filters_editor(shell: &Rc<Shell>, current_board: &Rc<RefCell<String>>, t
                 shell_remove.config.borrow().save();
             },
             trigger_render.clone(),
+            None,
         )
     };
 
@@ -428,9 +439,16 @@ fn open_temp_flags_panel(shell: &Rc<Shell>, current_board: &Rc<RefCell<String>>,
     let window = gtk4::Window::builder()
         .title(format!("Temporary pins/hides — /{board}/"))
         .transient_for(&shell.window)
-        .default_width(360)
-        .default_height(420)
         .build();
+    super::remember_window_size(
+        &window,
+        shell,
+        |c| (c.temporary_window_width, c.temporary_window_height),
+        |c, w, h| {
+            c.temporary_window_width = w;
+            c.temporary_window_height = h;
+        },
+    );
 
     let root = gtk4::Box::new(gtk4::Orientation::Vertical, 6);
     root.set_margin_top(10);

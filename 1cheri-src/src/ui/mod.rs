@@ -220,6 +220,29 @@ fn open_save_folder(shell: &Rc<Shell>) {
     }
 }
 
+/// Restores a secondary window's last-used size from config on open, and
+/// saves whatever size it ends up at back to config on close -- so windows
+/// like Filters/Settings/Temporary reopen at whatever size the user last
+/// resized them to, instead of resetting to a fixed default every time.
+/// `get_size`/`set_size` isolate this from which specific `Config` fields a
+/// given window uses, so one implementation covers all of them.
+pub fn remember_window_size(
+    window: &gtk4::Window,
+    shell: &Rc<Shell>,
+    get_size: impl Fn(&Config) -> (i32, i32) + 'static,
+    set_size: impl Fn(&mut Config, i32, i32) + 'static,
+) {
+    let (width, height) = get_size(&shell.config.borrow());
+    window.set_default_size(width, height);
+
+    let shell = shell.clone();
+    window.connect_close_request(move |window| {
+        set_size(&mut shell.config.borrow_mut(), window.default_width(), window.default_height());
+        shell.config.borrow().save();
+        glib::Propagation::Proceed
+    });
+}
+
 /// The "⋮" overflow menu (Open save folder, Settings), used by both pages'
 /// toolbars. Each call builds its own MenuButton/Popover/button instances --
 /// GTK widgets can only have one parent, so the same physical widget can't
@@ -323,6 +346,7 @@ pub fn build_editable_list_widget(
     add_item: impl Fn(String) + 'static,
     remove_item: impl Fn(&str) + 'static,
     on_change: Rc<dyn Fn()>,
+    extra_entry_widget: Option<gtk4::Widget>,
 ) -> gtk4::Widget {
     let section = gtk4::Box::new(gtk4::Orientation::Vertical, 4);
     let title_label = gtk4::Label::new(None);
@@ -411,6 +435,9 @@ pub fn build_editable_list_widget(
     let add_button = gtk4::Button::with_label("Add");
     entry_row.append(&entry);
     entry_row.append(&add_button);
+    if let Some(widget) = extra_entry_widget {
+        entry_row.append(&widget);
+    }
     section.append(&entry_row);
 
     let add_entry_text: Rc<dyn Fn(&gtk4::Entry)> = {

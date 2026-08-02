@@ -192,6 +192,25 @@ pub struct CatalogThread {
     pub ext: Option<String>,
 }
 
+/// One board entry from `a.4cdn.org/boards.json`, used by the Settings
+/// window's board directory ("?" next to Add) to help a user pick a board
+/// without having to already know its code. `meta_description` arrives
+/// HTML-entity-escaped, same as post comments -- decode with
+/// `comments::unescape_entities` before display.
+#[derive(Debug, Clone, Deserialize)]
+pub struct BoardInfo {
+    pub board: String,
+    pub title: String,
+    pub ws_board: u8,
+    #[serde(default)]
+    pub meta_description: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct BoardsResponse {
+    pub boards: Vec<BoardInfo>,
+}
+
 /// Flattened catalogue row for the UI and the cache, per project.md §17.
 #[derive(Debug, Clone)]
 pub struct ThreadSummary {
