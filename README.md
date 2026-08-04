@@ -2,6 +2,8 @@
 
 A keyboard-driven desktop viewer for browsing 4chan boards, opening threads, and watching their attached images and videos — built around a fast, native Linux workflow rather than a browser tab.
 
+1cheri is an unofficial, independently-developed client. It is not affiliated with, endorsed by, or officially connected to [4chan](https://www.4chan.org/) in any way. All content it displays is fetched live from 4chan and remains the property of the original posters and/or 4chan, as applicable — this project doesn't claim any ownership over it.
+
 **This is a read-only viewer. There is no ability to post, reply, or otherwise write to any thread or board — no captcha handling, no posting UI, no API calls that create content. This is a deliberate, permanent design decision, not a missing feature: posting is not something this program does or will ever do.**
 
 The default configured boards (`/wsg/`, `/g/`) are worksafe — nothing here is filtered or restricted, though, and any board can be added in Settings, including 18+ ones (`/gif/` is the primary target board this app was actually built around, just not something a fresh install adds for you).

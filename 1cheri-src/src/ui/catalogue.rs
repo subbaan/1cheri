@@ -672,6 +672,12 @@ pub fn build_page(shell: &Rc<Shell>, initial_board: String) {
     list_box.add_controller(list_nav_controller);
 
     let last_fetch: Rc<RefCell<HashMap<String, Instant>>> = Rc::new(RefCell::new(HashMap::new()));
+    // The `Last-Modified` value from each board's most recent successful
+    // catalogue fetch, sent back as `If-Modified-Since` on the next one --
+    // see net::fetch_catalogue. Separate from `last_fetch` above: that one
+    // gates whether a request happens at all (the 10s debounce); this one
+    // only affects what the server sends back when one does.
+    let last_modified: Rc<RefCell<HashMap<String, String>>> = Rc::new(RefCell::new(HashMap::new()));
     let current_board: Rc<RefCell<String>> = Rc::new(RefCell::new(initial_board.clone()));
     let current_sort: Rc<RefCell<String>> = Rc::new(RefCell::new(SORT_KEYS[initial_sort_index].to_string()));
     let search_text: Rc<RefCell<String>> = Rc::new(RefCell::new(String::new()));
@@ -882,6 +888,7 @@ pub fn build_page(shell: &Rc<Shell>, initial_board: String) {
         let render = render.clone();
         let status_label = status_label.clone();
         let last_fetch = last_fetch.clone();
+        let last_modified = last_modified.clone();
         Rc::new(move |board: String, force: bool| {
             if let Ok(cached) = storage::load_cached_threads(&shell.db, &board) {
                 *summaries.borrow_mut() = cached;
@@ -905,9 +912,17 @@ pub fn build_page(shell: &Rc<Shell>, initial_board: String) {
             let summaries = summaries.clone();
             let render = render.clone();
             let status_label = status_label.clone();
+            let last_modified = last_modified.clone();
             let board_for_result = board.clone();
-            net::fetch_catalogue(board, move |result| match result {
-                Ok(pages) => {
+            let ims = last_modified.borrow().get(&board).cloned();
+            net::fetch_catalogue(board, ims, move |result| match result {
+                Ok(net::CatalogFetch::NotModified) => {
+                    status_label.set_text(&format!("/{board_for_result}/ unchanged."));
+                }
+                Ok(net::CatalogFetch::Modified { pages, last_modified: new_lm }) => {
+                    if let Some(lm) = new_lm {
+                        last_modified.borrow_mut().insert(board_for_result.clone(), lm);
+                    }
                     let fetched: Vec<ThreadSummary> = pages
                         .iter()
                         .flat_map(|p| p.threads.iter())
