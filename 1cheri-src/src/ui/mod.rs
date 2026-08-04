@@ -220,6 +220,61 @@ fn open_save_folder(shell: &Rc<Shell>) {
     }
 }
 
+/// Small, static About window -- puts the same unofficial/not-affiliated
+/// disclosure the README states (per 4chan's API terms: disclose 4chan as
+/// the content source, with a link) somewhere every user actually sees
+/// in-app, not just on GitHub. Fixed size rather than `remember_window_size`
+/// since the content never changes length, unlike Filters/Settings/the
+/// board directory.
+fn open_about(shell: &Rc<Shell>) {
+    let window = gtk4::Window::builder()
+        .title("About 1cheri")
+        .transient_for(&shell.window)
+        .default_width(360)
+        .default_height(220)
+        .resizable(false)
+        .build();
+
+    let root = gtk4::Box::new(gtk4::Orientation::Vertical, 10);
+    root.set_margin_top(14);
+    root.set_margin_bottom(14);
+    root.set_margin_start(14);
+    root.set_margin_end(14);
+
+    let title_label = gtk4::Label::new(None);
+    title_label.set_markup(&format!("<b>1cheri</b> {}", env!("CARGO_PKG_VERSION")));
+    title_label.set_xalign(0.0);
+    root.append(&title_label);
+
+    let disclaimer_label = gtk4::Label::new(None);
+    disclaimer_label.set_markup(
+        "1cheri is an unofficial, independently-developed client. It is not affiliated with, \
+         endorsed by, or officially connected to 4chan in any way. All content it displays is \
+         fetched live from 4chan and remains the property of the original posters and/or 4chan, \
+         as applicable.",
+    );
+    disclaimer_label.set_xalign(0.0);
+    disclaimer_label.set_wrap(true);
+    root.append(&disclaimer_label);
+
+    let links_label = gtk4::Label::new(None);
+    links_label.set_use_markup(true);
+    links_label.set_markup(
+        "<a href=\"https://www.4chan.org/\">4chan.org</a>  \u{b7}  \
+         <a href=\"https://github.com/subbaan/1cheri\">Source on GitHub</a>",
+    );
+    links_label.set_xalign(0.0);
+    root.append(&links_label);
+
+    let license_label = gtk4::Label::new(Some("Licensed under the MIT License."));
+    license_label.set_xalign(0.0);
+    license_label.add_css_class("dim-label");
+    root.append(&license_label);
+
+    window.set_child(Some(&root));
+    window.present();
+}
+
 /// Restores a secondary window's last-used size from config on open, and
 /// saves whatever size it ends up at back to config on close -- so windows
 /// like Filters/Settings/Temporary reopen at whatever size the user last
@@ -248,11 +303,12 @@ pub fn remember_window_size(
 /// GTK widgets can only have one parent, so the same physical widget can't
 /// live in both the catalogue's and viewer's toolbars -- but both instances
 /// call the same shell-based actions (`open_save_folder`,
-/// `settings::open_settings`) so the two can't drift out of sync in behavior
-/// even though they're separate widgets.
+/// `settings::open_settings`, `open_about`) so the two can't drift out of
+/// sync in behavior even though they're separate widgets.
 pub fn build_overflow_menu(shell: &Rc<Shell>, extra_buttons: &[gtk4::Button]) -> gtk4::MenuButton {
     let save_folder_button = gtk4::Button::with_label("Open save folder");
     let settings_button = gtk4::Button::with_label("Settings");
+    let about_button = gtk4::Button::with_label("About");
 
     let popover_box = gtk4::Box::new(gtk4::Orientation::Vertical, 2);
     for button in extra_buttons {
@@ -260,6 +316,7 @@ pub fn build_overflow_menu(shell: &Rc<Shell>, extra_buttons: &[gtk4::Button]) ->
     }
     popover_box.append(&save_folder_button);
     popover_box.append(&settings_button);
+    popover_box.append(&about_button);
 
     let popover = gtk4::Popover::new();
     popover.set_child(Some(&popover_box));
@@ -287,6 +344,14 @@ pub fn build_overflow_menu(shell: &Rc<Shell>, extra_buttons: &[gtk4::Button]) ->
         move |_| {
             popover.popdown();
             settings::open_settings(&shell);
+        }
+    });
+    about_button.connect_clicked({
+        let shell = shell.clone();
+        let popover = popover.clone();
+        move |_| {
+            popover.popdown();
+            open_about(&shell);
         }
     });
 

@@ -1,4 +1,4 @@
-// 1cheri v0.4.28 — feature: catalogue fetches now use conditional (If-Modified-Since) requests per 4chan's API terms -- a 304 response is treated as "nothing new" instead of re-parsing identical data. README now discloses 4chan as the unofficial content source, with a link.
+// 1cheri v0.4.29 — feature: new "About" entry in the ⋮ menu shows version, the unofficial/not-affiliated-with-4chan disclosure, links to 4chan.org and the GitHub repo, and the MIT license line -- puts the same attribution the README states somewhere every user actually sees in-app.
 
 mod comments;
 mod config;
