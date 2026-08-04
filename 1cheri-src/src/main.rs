@@ -1,4 +1,4 @@
-// 1cheri v0.4.27 — feature: a "?" button next to Add in Settings' Boards section opens a searchable directory of every real 4chan board (fetched live), showing title/description and marking 18+ boards -- click one to add it directly.
+// 1cheri v0.4.28 — feature: catalogue fetches now use conditional (If-Modified-Since) requests per 4chan's API terms -- a 304 response is treated as "nothing new" instead of re-parsing identical data. README now discloses 4chan as the unofficial content source, with a link.
 
 mod comments;
 mod config;

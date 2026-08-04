@@ -66,16 +66,40 @@ fn poll_channel<T: Send + 'static, F: FnOnce(T) + 'static>(rx: mpsc::Receiver<T>
     });
 }
 
-pub fn fetch_catalogue<F: FnOnce(Result<Vec<CatalogPage>, String>) + 'static>(board: String, on_done: F) {
+/// Distinguishes "here's the current catalogue" from "confirmed unchanged
+/// since `if_modified_since`" -- 4chan's API terms ask clients to use
+/// conditional requests, and this is the one request this app makes
+/// repeatedly for the *same* resource across a session (board switches,
+/// manual refresh, the periodic re-render), so it's the one place this
+/// actually saves anything.
+pub enum CatalogFetch {
+    Modified { pages: Vec<CatalogPage>, last_modified: Option<String> },
+    NotModified,
+}
+
+pub fn fetch_catalogue<F: FnOnce(Result<CatalogFetch, String>) + 'static>(
+    board: String,
+    if_modified_since: Option<String>,
+    on_done: F,
+) {
     let (tx, rx) = mpsc::channel();
     thread::spawn(move || {
         throttle_global();
         let url = format!("https://a.4cdn.org/{board}/catalog.json");
-        let result = agent()
-            .get(&url)
-            .call()
-            .map_err(|e| e.to_string())
-            .and_then(|resp| resp.into_json::<Vec<CatalogPage>>().map_err(|e| e.to_string()));
+        let mut req = agent().get(&url);
+        if let Some(ims) = if_modified_since {
+            req = req.set("If-Modified-Since", &ims);
+        }
+        let result = match req.call() {
+            Ok(resp) => {
+                let last_modified = resp.header("Last-Modified").map(str::to_string);
+                resp.into_json::<Vec<CatalogPage>>()
+                    .map(|pages| CatalogFetch::Modified { pages, last_modified })
+                    .map_err(|e| e.to_string())
+            }
+            Err(ureq::Error::Status(304, _)) => Ok(CatalogFetch::NotModified),
+            Err(e) => Err(e.to_string()),
+        };
         let _ = tx.send(result);
     });
     poll_channel(rx, on_done);

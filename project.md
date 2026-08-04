@@ -535,12 +535,13 @@ If the item's file is already present in the local media cache (§14.3) -- becau
 
 ## 14. Caching and network behaviour
 
-All network requests are centralised through one module (`net.rs`), as planned, but it is simpler than originally specified: every request runs on a spawned thread and results are delivered back to the GTK main loop through a channel, but there is **no cancellation, no conditional (`If-Modified-Since`) requests, and no retry/backoff**. This is a known, documented simplification rather than an oversight -- the request volume this application generates doesn't currently justify the added complexity, but it's worth revisiting if that changes.
+All network requests are centralised through one module (`net.rs`), as planned, but it is simpler than originally specified: every request runs on a spawned thread and results are delivered back to the GTK main loop through a channel, but there is **no cancellation and no retry/backoff**. This is a known, documented simplification rather than an oversight -- the request volume this application generates doesn't currently justify the added complexity, but it's worth revisiting if that changes.
 
 Actually implemented, matching the original budget:
 
 - No more than one request per second, enforced globally, to `a.4cdn.org` (catalogue and thread JSON) -- **not** to media/thumbnail downloads from `i.4cdn.org`, which are deliberately left unthrottled (throttling them too caused thread-opens to visibly stall behind queued thumbnail downloads).
-- No more than one catalogue/thread refresh per ten seconds per board/thread -- enforced as a plain time-based debounce, not via conditional requests (since those aren't implemented).
+- No more than one catalogue/thread refresh per ten seconds per board/thread -- enforced as a plain time-based debounce, independent of and in addition to the conditional requests below (the debounce controls whether a request happens at all; conditional requests only affect what the server sends back when one does).
+- **Conditional (`If-Modified-Since`) requests for catalogue fetches**, added after 0.4.x use per 4chan's API terms ("Use If-Modified-Since when doing your requests"): each board's most recent successful fetch's `Last-Modified` response header is sent back as `If-Modified-Since` on the next request for that board; a `304 Not Modified` response (`net::CatalogFetch::NotModified`) is treated as "nothing new," leaving the cached thread list untouched rather than re-parsing and re-merging identical data. Scoped to catalogue fetches only -- thread fetches happen once when a thread is opened (there's no auto-poll for new replies while viewing one) and the board-directory fetch is a one-off manual action, so neither is ever re-requested for the same resource within a session, and conditional requests wouldn't save anything there.
 - A distinct `User-Agent` identifying the application and version.
 - Local caching of thumbnails and media (§14.2, §14.3) so the same file is not re-fetched once cached.
 
