@@ -22,6 +22,9 @@
 // OP-only per thread (reply bodies aren't fetched until a thread is opened,
 // which happens after filtering, not before) -- exactly where thread rules
 // like exclusion lists actually get stated.
+//
+// Words match singular/plural-insensitively (see `words_match`), so one
+// filter entry covers both "trap" and "traps" instead of needing two.
 
 const NEGATION_MARKERS: &[&str] = &[
     "no", "not", "non", "never", "without", "anti", "isnt", "arent", "dont", "doesnt", "wont", "cant", "cannot",
@@ -41,6 +44,29 @@ fn tokenize(s: &str) -> Vec<String> {
         .collect()
 }
 
+/// True if `b` is a regular English plural of `a`: a+"s" ("trap" -> "traps"),
+/// a+"es" ("box" -> "boxes"), or y -> "ies" ("titty" -> "titties"). The base
+/// must be at least two characters so that one-letter words don't pair up
+/// with common short words ("i"/"is", "a"/"as", "u"/"us").
+fn is_plural_of(a: &str, b: &str) -> bool {
+    if a.chars().count() < 2 {
+        return false;
+    }
+    if let Some(stem) = b.strip_prefix(a) {
+        return stem == "s" || stem == "es";
+    }
+    match (a.strip_suffix('y'), b.strip_suffix("ies")) {
+        (Some(a_stem), Some(b_stem)) => !a_stem.is_empty() && a_stem == b_stem,
+        _ => false,
+    }
+}
+
+/// Whole-word equality, tolerant of singular vs plural in either direction.
+/// Symmetric because the filter entry may be either form.
+fn words_match(a: &str, b: &str) -> bool {
+    a == b || is_plural_of(a, b) || is_plural_of(b, a)
+}
+
 /// True if `phrase_words` appears as a contiguous run in `haystack_words` at
 /// least once without a negation marker in the preceding lookback window.
 fn has_unnegated_match(haystack_words: &[String], phrase_words: &[String]) -> bool {
@@ -49,7 +75,8 @@ fn has_unnegated_match(haystack_words: &[String], phrase_words: &[String]) -> bo
         return false;
     }
     for start in 0..=(haystack_words.len() - n) {
-        if haystack_words[start..start + n] == phrase_words[..] {
+        let window = &haystack_words[start..start + n];
+        if window.iter().zip(phrase_words).all(|(h, p)| words_match(h, p)) {
             let lookback_start = start.saturating_sub(NEGATION_LOOKBACK);
             let preceding = &haystack_words[lookback_start..start];
             if !preceding.iter().any(|w| NEGATION_MARKERS.contains(&w.as_str())) {
@@ -128,6 +155,43 @@ mod tests {
         let words = phrases(&["Local Models"]);
         let matches = find_matches(Some("Local Models General"), "", &words);
         assert_eq!(matches, vec!["Local Models"]);
+    }
+
+    #[test]
+    fn singular_filter_matches_plural_text() {
+        let words = phrases(&["trap", "box", "titty", "glass"]);
+        let matches = find_matches(Some("traps and boxes"), "titties behind glasses", &words);
+        assert_eq!(matches, vec!["trap", "box", "titty", "glass"]);
+    }
+
+    #[test]
+    fn plural_filter_matches_singular_text() {
+        let words = phrases(&["traps", "movies"]);
+        let matches = find_matches(Some("a trap"), "one movie", &words);
+        assert_eq!(matches, vec!["traps", "movies"]);
+    }
+
+    #[test]
+    fn plural_matching_applies_per_word_in_phrases() {
+        let words = phrases(&["local model"]);
+        let matches = find_matches(Some("Local Models General"), "", &words);
+        assert_eq!(matches, vec!["local model"]);
+    }
+
+    #[test]
+    fn plural_matching_is_not_substring_matching() {
+        let words = phrases(&["cat", "i"]);
+        let matches = find_matches(Some("catalog"), "this is it, cats aside", &words);
+        assert_eq!(matches, vec!["cat"]);
+        let matches = find_matches(Some("catalog"), "this is it", &words);
+        assert!(matches.is_empty());
+    }
+
+    #[test]
+    fn negated_plural_does_not_match() {
+        let words = phrases(&["trap"]);
+        let matches = find_matches(Some("thread"), "no traps", &words);
+        assert!(matches.is_empty());
     }
 
     // The three cases below are three real threads pulled live from /gif/

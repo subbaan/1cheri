@@ -85,6 +85,34 @@ fn slugify(s: &str) -> String {
         .join("-")
 }
 
+/// The directory saved media for `media` in this thread goes into: either a
+/// `board/thread-slug/` subfolder of the configured save directory, or the
+/// save directory itself, per `Config::save_organize_by_thread`. Shared by
+/// `AppState::save_media_item` (which then resolves collisions within it)
+/// and `build_page`/`build_thumbnail_widget` (which only need to know
+/// whether a given item's expected file already exists there).
+fn resolve_save_dir(config: &Config, board: &str, thread_op_no: u64, thread_subject: &str) -> PathBuf {
+    let base = config.save_directory_expanded();
+    if config.save_organize_by_thread {
+        base.join(board).join(format!("{thread_op_no}-{}", slugify(thread_subject)))
+    } else {
+        base
+    }
+}
+
+/// Where `media` would land if saved right now, before any `_1`/`_2`
+/// collision suffix is applied -- good enough to check "has this already
+/// been saved" against, since that's the exact path the first save of an
+/// item produces.
+fn expected_save_path(config: &Config, board: &str, thread_op_no: u64, thread_subject: &str, media: &MediaPost) -> PathBuf {
+    let dir = resolve_save_dir(config, board, thread_op_no, thread_subject);
+    let base_name = config
+        .filename_template
+        .replace("{post}", &media.post_number.to_string())
+        .replace("{original_name}", &media.original_filename);
+    dir.join(format!("{base_name}{}", media.extension))
+}
+
 fn media_type_label(media_type: MediaType) -> &'static str {
     match media_type {
         MediaType::Video => "video",
@@ -160,6 +188,13 @@ struct AppState {
     status_label: gtk4::Label,
     context_label: gtk4::Label,
     media_dir: Rc<PathBuf>,
+    save_button: gtk4::Button,
+    /// One saved-indicator badge per entry in `media`, same order -- built
+    /// alongside the thumbnail strip in `build_page` and kept in sync by
+    /// `mark_saved` as items are saved, so `apply_selection` can read a
+    /// badge's visibility instead of re-checking the filesystem on every
+    /// navigation.
+    badges: Rc<Vec<gtk4::Image>>,
 }
 
 impl AppState {
@@ -204,6 +239,9 @@ impl AppState {
         }
         self.media_info_label.set_text(&info);
         self.media_info_label.set_tooltip_text(Some(&full_name));
+
+        let saved = self.badges.get(index).map(|b| b.is_visible()).unwrap_or(false);
+        self.save_button.set_label(if saved { "\u{2713} Saved" } else { "Save" });
 
         self.update_comment_panel(media.post_number);
         self.shell.window.set_title(Some(&format!(
@@ -301,6 +339,18 @@ impl AppState {
         self.media.get(self.current_index.get())
     }
 
+    /// Flips a media item's badge to "saved" and, if it's the one currently
+    /// on screen, updates the Save button label to match -- called once a
+    /// save of that item actually succeeds.
+    fn mark_saved(&self, index: usize) {
+        if let Some(badge) = self.badges.get(index) {
+            badge.set_visible(true);
+        }
+        if index == self.current_index.get() {
+            self.save_button.set_label("\u{2713} Saved");
+        }
+    }
+
     /// Resolves the save path (per-thread dir, `{post}`/`{original_name}`
     /// templating, `_1`/`_2` collision-avoidance) and either copies from the
     /// local cache or downloads `media`, reporting the outcome via `on_done`
@@ -312,11 +362,7 @@ impl AppState {
         let config = self.config();
         let config_ref = config.borrow();
 
-        let thread_dir_name = format!("{}-{}", self.thread.op.no, slugify(&self.thread.subject()));
-        let target_dir = config_ref
-            .save_directory_expanded()
-            .join(&self.thread.board)
-            .join(thread_dir_name);
+        let target_dir = resolve_save_dir(&config_ref, &self.thread.board, self.thread.op.no, &self.thread.subject());
 
         let base_name = config_ref
             .filename_template
@@ -364,14 +410,19 @@ impl AppState {
         let Some(media) = self.current_media() else {
             return;
         };
+        let index = self.current_index.get();
         self.status_label.set_text("Saving...");
         let status_label = self.status_label.clone();
+        let state = self.clone();
         self.save_media_item(media, move |result| {
-            let message = match result {
+            let message = match &result {
                 Ok(path) => format!("Saved to {}", path.display()),
                 Err(e) => format!("Save failed: {e}"),
             };
             status_label.set_text(&message);
+            if result.is_ok() {
+                state.mark_saved(index);
+            }
             let status_label = status_label.clone();
             glib::timeout_add_local_once(Duration::from_secs(4), move || status_label.set_text(""));
         });
@@ -395,7 +446,8 @@ impl AppState {
         }
         const MAX_CONCURRENT: usize = 2;
         button.set_sensitive(false);
-        let queue: Rc<RefCell<VecDeque<MediaPost>>> = Rc::new(RefCell::new(self.media.iter().cloned().collect()));
+        let queue: Rc<RefCell<VecDeque<(usize, MediaPost)>>> =
+            Rc::new(RefCell::new(self.media.iter().cloned().enumerate().collect()));
         let completed = Rc::new(Cell::new(0usize));
         let failed = Rc::new(Cell::new(0usize));
         self.status_label.set_text(&format!("Saving media: 0/{total}..."));
@@ -415,7 +467,7 @@ impl AppState {
     /// `run_next_download`, if any remain.
     fn schedule_next_download(
         &self,
-        queue: &Rc<RefCell<VecDeque<MediaPost>>>,
+        queue: &Rc<RefCell<VecDeque<(usize, MediaPost)>>>,
         completed: &Rc<Cell<usize>>,
         failed: &Rc<Cell<usize>>,
         total: usize,
@@ -440,13 +492,13 @@ impl AppState {
     /// first.
     fn run_next_download(
         &self,
-        queue: &Rc<RefCell<VecDeque<MediaPost>>>,
+        queue: &Rc<RefCell<VecDeque<(usize, MediaPost)>>>,
         completed: &Rc<Cell<usize>>,
         failed: &Rc<Cell<usize>>,
         total: usize,
         button: &gtk4::Button,
     ) {
-        let Some(media) = queue.borrow_mut().pop_front() else {
+        let Some((index, media)) = queue.borrow_mut().pop_front() else {
             return;
         };
         let state = self.clone();
@@ -455,7 +507,9 @@ impl AppState {
         let failed = failed.clone();
         let button = button.clone();
         self.save_media_item(&media, move |result| {
-            if result.is_err() {
+            if result.is_ok() {
+                state.mark_saved(index);
+            } else {
                 failed.set(failed.get() + 1);
             }
             let done = completed.get() + 1;
@@ -512,13 +566,12 @@ fn linkify_markup(text: &str) -> String {
     out
 }
 
-fn build_thumbnail_widget(media_dir: &Path, board: &str, media: &MediaPost) -> gtk4::Widget {
+/// Builds one thumbnail-strip row, plus the small "already saved" checkmark
+/// badge overlaid on it (initially shown per `saved`, then flipped live by
+/// `AppState::mark_saved` as items get saved during this session).
+fn build_thumbnail_widget(media_dir: &Path, board: &str, media: &MediaPost, saved: bool) -> (gtk4::Widget, gtk4::Image) {
     let thumb_container = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
     thumb_container.set_size_request(120, 90);
-    thumb_container.set_margin_top(4);
-    thumb_container.set_margin_bottom(4);
-    thumb_container.set_margin_start(4);
-    thumb_container.set_margin_end(4);
 
     match &media.thumbnail_url {
         Some(url) => {
@@ -546,7 +599,23 @@ fn build_thumbnail_widget(media_dir: &Path, board: &str, media: &MediaPost) -> g
         }
     }
 
-    thumb_container.upcast()
+    let overlay = gtk4::Overlay::new();
+    overlay.set_child(Some(&thumb_container));
+    overlay.set_margin_top(4);
+    overlay.set_margin_bottom(4);
+    overlay.set_margin_start(4);
+    overlay.set_margin_end(4);
+
+    let badge = gtk4::Image::from_icon_name("emblem-ok-symbolic");
+    badge.set_pixel_size(16);
+    badge.set_halign(gtk4::Align::End);
+    badge.set_valign(gtk4::Align::Start);
+    badge.add_css_class("success");
+    badge.set_tooltip_text(Some("Already saved"));
+    badge.set_visible(saved);
+    overlay.add_overlay(&badge);
+
+    (overlay.upcast(), badge)
 }
 
 fn build_page(shell: &Rc<Shell>, thread: Thread, media_dir: PathBuf, resume_post: Option<u64>) {
@@ -621,8 +690,15 @@ fn build_page(shell: &Rc<Shell>, thread: Thread, media_dir: PathBuf, resume_post
 
     let list_box = gtk4::ListBox::new();
     list_box.set_selection_mode(gtk4::SelectionMode::Browse);
-    for m in media.iter() {
-        list_box.append(&build_thumbnail_widget(&media_dir, &board, m));
+    let mut badges = Vec::with_capacity(media.len());
+    {
+        let config = shell.config.borrow();
+        for m in media.iter() {
+            let saved = expected_save_path(&config, &board, thread.op.no, &thread.subject(), m).exists();
+            let (widget, badge) = build_thumbnail_widget(&media_dir, &board, m, saved);
+            list_box.append(&widget);
+            badges.push(badge);
+        }
     }
     let thumbnail_scroller = gtk4::ScrolledWindow::new();
     thumbnail_scroller.set_child(Some(&list_box));
@@ -721,6 +797,8 @@ fn build_page(shell: &Rc<Shell>, thread: Thread, media_dir: PathBuf, resume_post
         status_label,
         context_label,
         media_dir: Rc::new(media_dir),
+        save_button: save_button.clone(),
+        badges: Rc::new(badges),
     };
 
     {

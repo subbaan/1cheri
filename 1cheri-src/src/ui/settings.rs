@@ -94,6 +94,20 @@ pub fn open_settings(shell: &Rc<Shell>) {
     root.append(&gtk4::Label::new(Some("Directory (Enter to apply):")));
     root.append(&save_dir_entry);
 
+    let organize_check = gtk4::CheckButton::with_label("Organize saves into per-thread folders");
+    organize_check.set_active(shell.config.borrow().save_organize_by_thread);
+    organize_check.set_tooltip_text(Some(
+        "On: saves go into <save dir>/<board>/<thread>/. Off: every file is dumped directly into the save directory.",
+    ));
+    organize_check.connect_toggled({
+        let shell = shell.clone();
+        move |btn| {
+            shell.config.borrow_mut().save_organize_by_thread = btn.is_active();
+            shell.config.borrow().save();
+        }
+    });
+    root.append(&organize_check);
+
     let template_entry = gtk4::Entry::new();
     template_entry.set_text(&shell.config.borrow().filename_template);
     template_entry.set_placeholder_text(Some("{post}_{original_name}"));

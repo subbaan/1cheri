@@ -11,7 +11,7 @@ The default configured boards (`/wsg/`, `/g/`) are worksafe — nothing here is 
 ## Features
 
 - Board catalogue with thread sorting (most videos, most images, most replies, newest, most recent activity) and live search.
-- Thread filtering: hide unwanted threads by word or phrase, per-board or global (applies across every board), with negation-aware matching so "no politics" doesn't trigger a hide on "politics".
+- Thread filtering: hide unwanted threads by word or phrase, per-board or global (applies across every board), with negation-aware matching so "no politics" doesn't trigger a hide on "politics", and singular/plural-insensitive so one entry like "trap" also catches "traps".
 - Thread pinning: the same word/phrase system surfaces favorites at the top of the catalogue instead of hiding them, plus one-off temporary pin/hide flags (right-click a thread) that auto-expire after a week with no manual cleanup needed.
 - Thumbnail-strip media browser with fast keyboard navigation between images and videos.
 - Native video playback via libmpv — hardware decoding, mute/volume/loop persisted between runs, fixed-step seeking.
