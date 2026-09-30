@@ -1,4 +1,4 @@
-// 1cheri v0.4.29 — feature: new "About" entry in the ⋮ menu shows version, the unofficial/not-affiliated-with-4chan disclosure, links to 4chan.org and the GitHub repo, and the MIT license line -- puts the same attribution the README states somewhere every user actually sees in-app.
+// 1cheri v0.4.31 — feature: word filters now match singular and plural forms interchangeably (trap/traps, box/boxes, titty/titties), so one entry covers both. (v0.4.30: saved-media indicators -- "✓ Saved" button and thumbnail checkmark badges; Settings toggle for per-thread vs flat save folders.)
 
 mod comments;
 mod config;
@@ -28,7 +28,7 @@ fn print_help() {
     println!();
     println!("Options:");
     println!("  -h, --help     Print this help and exit");
-    println!("  -v, --version  Print version and exit");
+    println!("  -V, --version  Print version and exit (-v also accepted)");
     println!("      --fixture  Open the bundled offline sample thread instead of");
     println!("                 fetching a real board (for local dev/testing)");
 }
@@ -39,7 +39,7 @@ fn main() -> ExitCode {
         print_help();
         return ExitCode::SUCCESS;
     }
-    if args.iter().any(|a| a == "-v" || a == "--version") {
+    if args.iter().any(|a| a == "-V" || a == "-v" || a == "--version") {
         println!("1cheri {VERSION}");
         return ExitCode::SUCCESS;
     }

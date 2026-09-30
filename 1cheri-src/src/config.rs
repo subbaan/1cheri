@@ -12,6 +12,12 @@ pub struct Config {
     pub loop_video: bool,
     pub autoplay: bool,
     pub save_directory: String,
+    /// Whether saved media goes into a `board/thread-slug/` subfolder under
+    /// `save_directory` (the original behaviour) or straight into
+    /// `save_directory` itself with no subfolders. Filenames still include
+    /// the post number by default, so flat saves rarely collide even across
+    /// threads/boards -- see `ui::viewer::resolve_save_dir`.
+    pub save_organize_by_thread: bool,
     pub filename_template: String,
     pub boards: Vec<String>,
     pub active_board: String,
@@ -71,6 +77,7 @@ impl Default for Config {
             loop_video: true,
             autoplay: true,
             save_directory: "~/Downloads/1cheri".to_string(),
+            save_organize_by_thread: true,
             filename_template: "{post}_{original_name}".to_string(),
             // Worksafe by default -- /wsg/ ("Worksafe GIF") and /g/
             // (Technology) -- since a fresh install shouldn't silently drop
