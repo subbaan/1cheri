@@ -1,4 +1,4 @@
-// 1cheri v0.4.33 — feature: redesigned Filters window -- sidebar of lists (pick any board, or all boards) with one list shown at a time, live per-word match counts, sorting, and a right-click menu on each word to edit it or move it between pin/hide and board/global. (v0.4.32: right-click "Pin/Hide matching this subject…" opens an editable entry first.)
+// 1cheri v0.4.34 — fix: "already saved" badges now come from a saved_media table in the database (one query per thread open, records expire after 9 days) instead of checking every media item's save path on disk. (v0.4.33: redesigned Filters window.)
 
 mod comments;
 mod config;

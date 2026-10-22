@@ -87,10 +87,8 @@ fn slugify(s: &str) -> String {
 
 /// The directory saved media for `media` in this thread goes into: either a
 /// `board/thread-slug/` subfolder of the configured save directory, or the
-/// save directory itself, per `Config::save_organize_by_thread`. Shared by
-/// `AppState::save_media_item` (which then resolves collisions within it)
-/// and `build_page`/`build_thumbnail_widget` (which only need to know
-/// whether a given item's expected file already exists there).
+/// save directory itself, per `Config::save_organize_by_thread`. Used by
+/// `AppState::save_media_item`, which then resolves collisions within it.
 fn resolve_save_dir(config: &Config, board: &str, thread_op_no: u64, thread_subject: &str) -> PathBuf {
     let base = config.save_directory_expanded();
     if config.save_organize_by_thread {
@@ -98,19 +96,6 @@ fn resolve_save_dir(config: &Config, board: &str, thread_op_no: u64, thread_subj
     } else {
         base
     }
-}
-
-/// Where `media` would land if saved right now, before any `_1`/`_2`
-/// collision suffix is applied -- good enough to check "has this already
-/// been saved" against, since that's the exact path the first save of an
-/// item produces.
-fn expected_save_path(config: &Config, board: &str, thread_op_no: u64, thread_subject: &str, media: &MediaPost) -> PathBuf {
-    let dir = resolve_save_dir(config, board, thread_op_no, thread_subject);
-    let base_name = config
-        .filename_template
-        .replace("{post}", &media.post_number.to_string())
-        .replace("{original_name}", &media.original_filename);
-    dir.join(format!("{base_name}{}", media.extension))
 }
 
 fn media_type_label(media_type: MediaType) -> &'static str {
@@ -343,6 +328,13 @@ impl AppState {
     /// on screen, updates the Save button label to match -- called once a
     /// save of that item actually succeeds.
     fn mark_saved(&self, index: usize) {
+        if let Some(media) = self.media.get(index) {
+            if let Err(e) =
+                storage::mark_media_saved(&self.shell.db, &self.thread.board, self.thread.op.no, media.post_number)
+            {
+                eprintln!("[storage] failed to record saved media: {e}");
+            }
+        }
         if let Some(badge) = self.badges.get(index) {
             badge.set_visible(true);
         }
@@ -567,8 +559,9 @@ fn linkify_markup(text: &str) -> String {
 }
 
 /// Builds one thumbnail-strip row, plus the small "already saved" checkmark
-/// badge overlaid on it (initially shown per `saved`, then flipped live by
-/// `AppState::mark_saved` as items get saved during this session).
+/// badge overlaid on it (initially shown per `saved`, from the `saved_media`
+/// table, then flipped live by `AppState::mark_saved` as items get saved
+/// during this session).
 fn build_thumbnail_widget(media_dir: &Path, board: &str, media: &MediaPost, saved: bool) -> (gtk4::Widget, gtk4::Image) {
     let thumb_container = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
     thumb_container.set_size_request(120, 90);
@@ -692,10 +685,11 @@ fn build_page(shell: &Rc<Shell>, thread: Thread, media_dir: PathBuf, resume_post
     list_box.set_selection_mode(gtk4::SelectionMode::Browse);
     let mut badges = Vec::with_capacity(media.len());
     {
-        let config = shell.config.borrow();
+        // One query for the whole thread rather than checking each item's
+        // save path on disk -- see storage.rs's `saved_media` table.
+        let saved_posts = storage::load_saved_posts(&shell.db, &board, thread.op.no).unwrap_or_default();
         for m in media.iter() {
-            let saved = expected_save_path(&config, &board, thread.op.no, &thread.subject(), m).exists();
-            let (widget, badge) = build_thumbnail_widget(&media_dir, &board, m, saved);
+            let (widget, badge) = build_thumbnail_widget(&media_dir, &board, m, saved_posts.contains(&m.post_number));
             list_box.append(&widget);
             badges.push(badge);
         }

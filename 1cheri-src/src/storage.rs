@@ -9,6 +9,7 @@
 
 use crate::models::ThreadSummary;
 use rusqlite::{params, Connection};
+use std::collections::HashSet;
 use std::path::PathBuf;
 
 fn db_path() -> PathBuf {
@@ -59,6 +60,21 @@ pub fn open() -> rusqlite::Result<Connection> {
             key   TEXT PRIMARY KEY,
             value TEXT NOT NULL
         );
+
+        -- Media the user has saved, so the viewer's 'already saved' badges
+        -- come from one query per thread open instead of stat()ing every
+        -- item's expected save path on disk (slow on spun-down or network
+        -- drives). Post numbers are unique per board, so (board, post) is
+        -- the key; `thread` is there for the per-thread lookup. Rows expire
+        -- after SAVED_MEDIA_TTL_SECS via `prune_expired_saved_media`.
+        CREATE TABLE IF NOT EXISTS saved_media (
+            board     TEXT NOT NULL,
+            thread    INTEGER NOT NULL,
+            post      INTEGER NOT NULL,
+            saved_at  INTEGER NOT NULL,
+            PRIMARY KEY (board, post)
+        );
+        CREATE INDEX IF NOT EXISTS saved_media_by_thread ON saved_media (board, thread);
         ",
     )?;
     // Manual per-thread hide override (project.md's own suggested schema
@@ -255,6 +271,35 @@ pub fn load_temp_flags(conn: &Connection, board: &str) -> rusqlite::Result<Vec<T
         })
     })?;
     rows.collect()
+}
+
+/// How long a saved-media record is kept: a week covers any real thread's
+/// lifetime (same margin as `TEMP_FLAG_TTL_SECS`), plus two days' grace.
+/// Past that the thread is long gone, so its badges can't be shown anyway.
+pub const SAVED_MEDIA_TTL_SECS: i64 = 9 * 24 * 3600;
+
+pub fn mark_media_saved(conn: &Connection, board: &str, thread: u64, post: u64) -> rusqlite::Result<()> {
+    conn.execute(
+        "INSERT OR REPLACE INTO saved_media (board, thread, post, saved_at) VALUES (?1, ?2, ?3, ?4)",
+        params![board, thread as i64, post as i64, now_unix()],
+    )?;
+    Ok(())
+}
+
+/// Post numbers of every media item saved from this thread.
+pub fn load_saved_posts(conn: &Connection, board: &str, thread: u64) -> rusqlite::Result<HashSet<u64>> {
+    let mut stmt = conn.prepare("SELECT post FROM saved_media WHERE board = ?1 AND thread = ?2")?;
+    let rows = stmt.query_map(params![board, thread as i64], |row| row.get::<_, i64>(0))?;
+    rows.map(|r| r.map(|post| post as u64)).collect()
+}
+
+/// Deletes saved-media records older than `SAVED_MEDIA_TTL_SECS`. Called
+/// alongside `prune_expired_temp_flags`, at startup and hourly.
+pub fn prune_expired_saved_media(conn: &Connection) -> rusqlite::Result<usize> {
+    conn.execute(
+        "DELETE FROM saved_media WHERE saved_at < ?1",
+        params![now_unix() - SAVED_MEDIA_TTL_SECS],
+    )
 }
 
 pub fn update_video_count(conn: &Connection, board: &str, number: u64, count: u32) -> rusqlite::Result<()> {

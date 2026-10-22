@@ -527,7 +527,7 @@ The application:
 - Displays a non-blocking save confirmation (a status-bar message, auto-clearing after a few seconds).
 - Allows the save directory and filename pattern to be configured (Settings window).
 
-Not implemented: "detect previously saved media" in the sense of recognising *this exact post was already saved* and surfacing that in the UI (e.g. a saved-state badge). Pressing Save again for an already-saved item just writes another numbered copy, per the overwrite-avoidance behaviour above.
+Saved-state indicators (added in 0.4.30): items already saved show a checkmark badge on their thumbnail and a "✓ Saved" Save button. Since 0.4.34 this comes from a `saved_media` table in the SQLite state database (one row per saved post, written when a save succeeds, read with one query when a thread opens, and deleted after 9 days -- a week's thread lifetime plus two days' grace), not from checking each item's expected save path on disk, which meant a stat per media item on every thread open and woke slow or network drives. Consequences: a file deleted or moved after saving still shows as saved, and saves made by versions before 0.4.34 aren't recorded. Pressing Save again for an already-saved item still writes another numbered copy, per the overwrite-avoidance behaviour above.
 
 If the item's file is already present in the local media cache (§14.3) -- because it was played or prefetched -- saving copies it directly instead of re-downloading.
 

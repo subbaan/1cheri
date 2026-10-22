@@ -104,6 +104,9 @@ pub fn build_window(app: &gtk4::Application, config: Config, fixture_media_dir: 
     if let Err(e) = storage::prune_expired_temp_flags(&db) {
         eprintln!("[storage] failed to prune expired temp flags: {e}");
     }
+    if let Err(e) = storage::prune_expired_saved_media(&db) {
+        eprintln!("[storage] failed to prune expired saved-media records: {e}");
+    }
 
     if let Some(settings) = gtk4::Settings::default() {
         settings.set_gtk_application_prefer_dark_theme(true);
@@ -173,13 +176,17 @@ pub fn build_window(app: &gtk4::Application, config: Config, fixture_media_dir: 
     }
     shell.window.add_controller(quit_controller);
 
-    // Startup-only pruning (above) wouldn't catch temp flags that expire
-    // mid-session on a long-running instance -- sweep hourly too.
+    // Startup-only pruning (above) wouldn't catch temp flags (or saved-media
+    // records) that expire mid-session on a long-running instance -- sweep
+    // hourly too.
     glib::timeout_add_local(std::time::Duration::from_secs(3600), {
         let db = shell.db.clone();
         move || {
             if let Err(e) = storage::prune_expired_temp_flags(&db) {
                 eprintln!("[storage] failed to prune expired temp flags: {e}");
+            }
+            if let Err(e) = storage::prune_expired_saved_media(&db) {
+                eprintln!("[storage] failed to prune expired saved-media records: {e}");
             }
             glib::ControlFlow::Continue
         }
