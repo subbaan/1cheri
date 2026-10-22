@@ -1,12 +1,13 @@
 use super::viewer;
-use super::{build_editable_list_widget, build_overflow_menu, Shell};
+use super::{build_overflow_menu, filters_editor, Shell};
+use crate::config::{FilterKind, FilterScope};
 use crate::filters;
 use crate::models::{TempFlagKind, ThreadSummary};
 use crate::{net, storage, thumbnails};
 use gtk4::gdk;
 use gtk4::glib;
 use gtk4::prelude::*;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
@@ -164,9 +165,9 @@ fn build_row(summary: &ThreadSummary, pinned: bool, hidden_reasons: Option<&[Str
 
 /// Wires a right-click popover onto a thread row offering "Pin matching this
 /// subject" / "Hide matching this subject" -- project.md §11.5's quick-hide
-/// sketch, extended to pinning. Adds the thread's full subject as a phrase;
-/// it can be trimmed to something more general afterwards in the Filters
-/// editor.
+/// sketch, extended to pinning. Either action swaps the popover to an
+/// editable entry pre-filled with the thread's full subject, so it can be
+/// trimmed to something more general before being added as a phrase.
 fn attach_quick_actions(
     row_widget: &gtk4::Widget,
     shell: &Rc<Shell>,
@@ -190,8 +191,8 @@ fn attach_quick_actions(
     row_popovers.borrow_mut().push(popover.clone());
 
     let popover_box = gtk4::Box::new(gtk4::Orientation::Vertical, 2);
-    let pin_button = gtk4::Button::with_label("Pin matching this subject");
-    let hide_button = gtk4::Button::with_label("Hide matching this subject");
+    let pin_button = gtk4::Button::with_label("Pin matching this subject…");
+    let hide_button = gtk4::Button::with_label("Hide matching this subject…");
     // Temporary, auto-expiring per-thread flags, distinct from the
     // permanent word-based actions above: for the "this thread doesn't
     // match any word but I want it pinned/hidden for a while" case. A
@@ -208,34 +209,90 @@ fn attach_quick_actions(
     popover_box.append(&hide_button);
     popover_box.append(&temp_pin_button);
     popover_box.append(&temp_hide_button);
-    popover.set_child(Some(&popover_box));
 
+    // Second page: the subject in an editable entry, so it can be cut down
+    // to the part that's actually worth filtering on before it's added.
+    let edit_box = gtk4::Box::new(gtk4::Orientation::Vertical, 6);
+    let edit_label = gtk4::Label::new(None);
+    edit_label.set_xalign(0.0);
+    let edit_entry = gtk4::Entry::new();
+    edit_entry.set_width_chars(36);
+    let edit_buttons = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
+    edit_buttons.set_halign(gtk4::Align::End);
+    let cancel_button = gtk4::Button::with_label("Cancel");
+    let confirm_button = gtk4::Button::new();
+    confirm_button.add_css_class("suggested-action");
+    edit_buttons.append(&cancel_button);
+    edit_buttons.append(&confirm_button);
+    edit_box.append(&edit_label);
+    edit_box.append(&edit_entry);
+    edit_box.append(&edit_buttons);
+
+    let popover_stack = gtk4::Stack::new();
+    popover_stack.set_transition_type(gtk4::StackTransitionType::None);
+    popover_stack.set_vhomogeneous(false);
+    popover_stack.set_hhomogeneous(false);
+    popover_stack.add_named(&popover_box, Some("menu"));
+    popover_stack.add_named(&edit_box, Some("edit"));
+    popover.set_child(Some(&popover_stack));
+
+    // true = the edit page is adding a pin word, false = a hide word.
+    let editing_pin = Rc::new(Cell::new(true));
+    let open_editor: Rc<dyn Fn(bool)> = {
+        let popover_stack = popover_stack.clone();
+        let edit_label = edit_label.clone();
+        let edit_entry = edit_entry.clone();
+        let confirm_button = confirm_button.clone();
+        let editing_pin = editing_pin.clone();
+        Rc::new(move |pin: bool| {
+            editing_pin.set(pin);
+            edit_label.set_text(if pin { "Pin threads matching:" } else { "Hide threads matching:" });
+            confirm_button.set_label(if pin { "Pin" } else { "Hide" });
+            edit_entry.set_text(&subject);
+            popover_stack.set_visible_child_name("edit");
+            edit_entry.grab_focus();
+            edit_entry.select_region(0, -1);
+        })
+    };
     {
-        let shell = shell.clone();
-        let current_board = current_board.clone();
-        let subject = subject.clone();
-        let trigger_render = trigger_render.clone();
-        let popover = popover.clone();
-        pin_button.connect_clicked(move |_| {
-            let board = current_board.borrow().clone();
-            shell.config.borrow_mut().add_pin_word(&board, subject.clone());
-            shell.config.borrow().save();
-            popover.popdown();
-            trigger_render();
-        });
+        let open_editor = open_editor.clone();
+        pin_button.connect_clicked(move |_| open_editor(true));
     }
-    {
+    hide_button.connect_clicked(move |_| open_editor(false));
+
+    let confirm: Rc<dyn Fn()> = {
         let shell = shell.clone();
         let current_board = current_board.clone();
         let trigger_render = trigger_render.clone();
         let popover = popover.clone();
-        hide_button.connect_clicked(move |_| {
-            let board = current_board.borrow().clone();
-            shell.config.borrow_mut().add_hide_word(&board, subject.clone());
+        let edit_entry = edit_entry.clone();
+        let editing_pin = editing_pin.clone();
+        Rc::new(move || {
+            let word = edit_entry.text().to_string();
+            if word.trim().is_empty() {
+                return;
+            }
+            let scope = FilterScope::Board(current_board.borrow().clone());
+            let kind = if editing_pin.get() { FilterKind::Pin } else { FilterKind::Hide };
+            shell.config.borrow_mut().add_filter_word(&scope, kind, word);
             shell.config.borrow().save();
             popover.popdown();
             trigger_render();
-        });
+        })
+    };
+    {
+        let confirm = confirm.clone();
+        confirm_button.connect_clicked(move |_| confirm());
+    }
+    edit_entry.connect_activate(move |_| confirm());
+    {
+        let popover = popover.clone();
+        cancel_button.connect_clicked(move |_| popover.popdown());
+    }
+    // Always reopen on the menu page, not wherever it was left.
+    {
+        let popover_stack = popover_stack.clone();
+        popover.connect_closed(move |_| popover_stack.set_visible_child_name("menu"));
     }
     {
         let shell = shell.clone();
@@ -290,150 +347,6 @@ fn attach_quick_actions(
     row_widget.add_controller(gesture);
 }
 
-fn open_filters_editor(shell: &Rc<Shell>, current_board: &Rc<RefCell<String>>, trigger_render: &Rc<dyn Fn()>) {
-    let board = current_board.borrow().clone();
-    let window = gtk4::Window::builder()
-        .title(format!("Filters — /{board}/"))
-        .transient_for(&shell.window)
-        .build();
-    super::remember_window_size(
-        &window,
-        shell,
-        |c| (c.filters_window_width, c.filters_window_height),
-        |c, w, h| {
-            c.filters_window_width = w;
-            c.filters_window_height = h;
-        },
-    );
-
-    let root = gtk4::Box::new(gtk4::Orientation::Vertical, 12);
-    root.set_margin_top(10);
-    root.set_margin_bottom(10);
-    root.set_margin_start(10);
-    root.set_margin_end(10);
-
-    let global_hint = gtk4::Label::new(Some("Applies to every board"));
-    global_hint.set_xalign(0.0);
-    global_hint.add_css_class("dim-label");
-
-    let global_pin_words_widget = {
-        let shell = shell.clone();
-        let shell_add = shell.clone();
-        let shell_remove = shell.clone();
-        build_editable_list_widget(
-            "Global pin words",
-            "word or phrase",
-            true,
-            move || shell.config.borrow().global_pin_words().to_vec(),
-            move |word| {
-                shell_add.config.borrow_mut().add_global_pin_word(word);
-                shell_add.config.borrow().save();
-            },
-            move |word| {
-                shell_remove.config.borrow_mut().remove_global_pin_word(word);
-                shell_remove.config.borrow().save();
-            },
-            trigger_render.clone(),
-            None,
-        )
-    };
-    let global_hide_words_widget = {
-        let shell = shell.clone();
-        let shell_add = shell.clone();
-        let shell_remove = shell.clone();
-        build_editable_list_widget(
-            "Global hide words",
-            "word or phrase",
-            true,
-            move || shell.config.borrow().global_hide_words().to_vec(),
-            move |word| {
-                shell_add.config.borrow_mut().add_global_hide_word(word);
-                shell_add.config.borrow().save();
-            },
-            move |word| {
-                shell_remove.config.borrow_mut().remove_global_hide_word(word);
-                shell_remove.config.borrow().save();
-            },
-            trigger_render.clone(),
-            None,
-        )
-    };
-
-    let pin_words_widget = {
-        let shell = shell.clone();
-        let current_board = current_board.clone();
-        let shell_add = shell.clone();
-        let current_board_add = current_board.clone();
-        let shell_remove = shell.clone();
-        let current_board_remove = current_board.clone();
-        build_editable_list_widget(
-            "Pin words",
-            "word or phrase",
-            true,
-            move || shell.config.borrow().pin_words_for(&current_board.borrow()).to_vec(),
-            move |word| {
-                let board = current_board_add.borrow().clone();
-                shell_add.config.borrow_mut().add_pin_word(&board, word);
-                shell_add.config.borrow().save();
-            },
-            move |word| {
-                let board = current_board_remove.borrow().clone();
-                shell_remove.config.borrow_mut().remove_pin_word(&board, word);
-                shell_remove.config.borrow().save();
-            },
-            trigger_render.clone(),
-            None,
-        )
-    };
-    let hide_words_widget = {
-        let shell = shell.clone();
-        let current_board = current_board.clone();
-        let shell_add = shell.clone();
-        let current_board_add = current_board.clone();
-        let shell_remove = shell.clone();
-        let current_board_remove = current_board.clone();
-        build_editable_list_widget(
-            "Hide words",
-            "word or phrase",
-            true,
-            move || shell.config.borrow().hide_words_for(&current_board.borrow()).to_vec(),
-            move |word| {
-                let board = current_board_add.borrow().clone();
-                shell_add.config.borrow_mut().add_hide_word(&board, word);
-                shell_add.config.borrow().save();
-            },
-            move |word| {
-                let board = current_board_remove.borrow().clone();
-                shell_remove.config.borrow_mut().remove_hide_word(&board, word);
-                shell_remove.config.borrow().save();
-            },
-            trigger_render.clone(),
-            None,
-        )
-    };
-
-    root.append(&global_hint);
-    root.append(&global_pin_words_widget);
-    root.append(&global_hide_words_widget);
-    root.append(&gtk4::Separator::new(gtk4::Orientation::Horizontal));
-    root.append(&pin_words_widget);
-    root.append(&hide_words_widget);
-
-    let scroller = gtk4::ScrolledWindow::new();
-    scroller.set_child(Some(&root));
-    scroller.set_vexpand(true);
-
-    window.set_child(Some(&scroller));
-    window.present();
-}
-
-/// Lists every thread on the current board that's currently temporarily
-/// pinned or hidden (project.md-adjacent quality-of-life addition, not from
-/// the original spec): each row shows the subject, the flag kind, and how
-/// long ago it was set, with a "Remove" button. Self-rebuilds on removal
-/// via the same `Rc<RefCell<Option<Rc<dyn Fn()>>>>` cell pattern used for
-/// `rebuild_tabs_cell` below, since entries can disappear while this window
-/// is open.
 fn open_temp_flags_panel(shell: &Rc<Shell>, current_board: &Rc<RefCell<String>>, reload_and_render: &Rc<dyn Fn()>) {
     let board = current_board.borrow().clone();
     let window = gtk4::Window::builder()
@@ -1104,8 +1017,9 @@ pub fn build_page(shell: &Rc<Shell>, initial_board: String) {
     filters_button.connect_clicked({
         let shell = shell.clone();
         let current_board = current_board.clone();
+        let summaries = summaries.clone();
         let render = render.clone();
-        move |_| open_filters_editor(&shell, &current_board, &render)
+        move |_| filters_editor::open(&shell, &current_board, &summaries, &render)
     });
 
     temporary_button.connect_clicked({

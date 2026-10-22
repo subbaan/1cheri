@@ -1,4 +1,4 @@
-// 1cheri v0.4.31 — feature: word filters now match singular and plural forms interchangeably (trap/traps, box/boxes, titty/titties), so one entry covers both. (v0.4.30: saved-media indicators -- "✓ Saved" button and thumbnail checkmark badges; Settings toggle for per-thread vs flat save folders.)
+// 1cheri v0.4.33 — feature: redesigned Filters window -- sidebar of lists (pick any board, or all boards) with one list shown at a time, live per-word match counts, sorting, and a right-click menu on each word to edit it or move it between pin/hide and board/global. (v0.4.32: right-click "Pin/Hide matching this subject…" opens an editable entry first.)
 
 mod comments;
 mod config;

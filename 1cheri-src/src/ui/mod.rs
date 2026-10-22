@@ -1,4 +1,5 @@
 mod catalogue;
+mod filters_editor;
 mod settings;
 mod viewer;
 
@@ -363,9 +364,10 @@ pub fn build_overflow_menu(shell: &Rc<Shell>, extra_buttons: &[gtk4::Button]) ->
 }
 
 /// A labelled, editable list widget: existing entries with a remove button
-/// each, plus an add row. Shared by catalogue.rs's pin/hide word lists and
-/// settings.rs's board list -- the third occurrence of this exact pattern,
-/// which is what justified generalizing it out of catalogue.rs.
+/// each, plus an add row. Originally shared by the pin/hide word lists and
+/// settings.rs's board list; the word lists moved to their own sidebar
+/// editor (filters_editor.rs) in 0.4.33, leaving the chip layout unused for
+/// now.
 /// The two item-container styles `build_editable_list_widget` can render
 /// into: a plain one-per-row list (unchanged original behaviour, still used
 /// by Settings' board list), or a wrapping "chip" flow (filter word lists).
@@ -572,5 +574,26 @@ row.pinned-row:selected {
     border: 1px solid #4a4a4a;
     border-radius: 999px;
     padding: 2px 4px 2px 10px;
+}
+.filter-chip-count {
+    color: #a0a0a0;
+    font-size: smaller;
+    background-color: #2b2b2b;
+    border-radius: 999px;
+    padding: 0 6px;
+}
+.filter-chip-unused { opacity: 0.55; }
+list.filters-sidebar { background-color: #242424; }
+list.filters-sidebar row {
+    background-color: transparent;
+    padding: 6px 10px;
+}
+list.filters-sidebar row:selected { background-color: #3584e4; }
+list.filters-sidebar row:selected label { color: #ffffff; }
+.filters-sidebar-header {
+    color: #8a8a8a;
+    font-size: smaller;
+    font-weight: bold;
+    margin-top: 8px;
 }
 ";

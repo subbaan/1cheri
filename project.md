@@ -415,7 +415,7 @@ In practice, thread filters only ever inspect **subject and OP comment text** --
 
 Matching is word/phrase based, with one important refinement discovered through real use: **negation-awareness**. A naive substring match on a hide word like "BBC" would also hide a thread that says "NO BBC" -- an explicit exclusion, the opposite of what the hide word is for. The matcher tokenizes the text and checks a short lookback window before each match for negation markers (e.g. "no", "not", "without"); a negated occurrence doesn't count as a match unless a separate, unnegated occurrence exists elsewhere in the same text. This is thread-catalogue-specific: only the OP's subject and first post are scanned, not every reply, matching the original design's reasoning that replies aren't scanned in bulk.
 
-Two word lists exist per board, both user-editable through a Filters window (word/phrase entries, add/remove, rendered as removable chips -- there is no condition/operator/field picker):
+Two word lists exist per board, both user-editable through a Filters window (word/phrase entries, add/remove, rendered as removable chips -- there is no condition/operator/field picker). Since 0.4.33 the window is a sidebar of lists (a board picker with that board's pin/hide lists, then the global pin/hide lists) with only the selected list shown; each chip shows how many threads in that board's catalogue it currently matches (dimmed at zero, to spot dead filters), and right-clicking a chip edits the word in place or moves it between pin/hide and board/global:
 
 - **Pin words**: a match highlights the thread and sorts it to the top of the catalogue.
 - **Hide words**: a match hides the thread (moved into a separate "Hidden (N)" toggle view rather than removed outright).
